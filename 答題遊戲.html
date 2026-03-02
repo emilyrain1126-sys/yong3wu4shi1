@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>互動式益智問答教學遊戲 - 終極排版優化版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        .animate-fade-in { animation: fadeIn 0.3s ease-out; }
+        .animate-zoom-in { animation: zoomIn 0.2s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes zoomIn { from { opacity: 0; transform: scale(0.95); } to { opacity: 1; transform: scale(1); } }
+        
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        .team-row-active { background-color: #f0f9ff; border-left: 4px solid #3b82f6; }
+
+        /* 讓文字支援換行：打 <br> 或在程式碼按 Enter 換行都有效 */
+        #modal-question-text, #modal-answer-text {
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(1);
+        }
+
+        /* 慶祝動畫 */
+        .confetti { position: absolute; width: 10px; height: 10px; background-color: #f00; animation: confetti-fall 3s linear infinite; }
+        @keyframes confetti-fall { 
+            0% { transform: translateY(-10vh) rotate(0deg); opacity: 1; }
+            100% { transform: translateY(100vh) rotate(720deg); opacity: 0; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans min-h-screen">
+
+    <!-- 設定畫面 -->
+    <div id="setup-screen" class="min-h-screen flex items-center justify-center p-6">
+        <div class="max-w-md w-full bg-white rounded-3xl shadow-xl p-8 text-center animate-zoom-in">
+            <div class="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i data-lucide="trophy" size="40"></i>
+            </div>
+            <h1 class="text-3xl font-black text-slate-800 mb-2">益智挑戰：終極版</h1>
+            <div class="bg-blue-50 p-4 rounded-xl text-left text-sm text-blue-700 mb-8 space-y-1">
+                <p><strong>🔥 教學競賽規則：</strong></p>
+                <p>1. <b>主場隊</b>：答對獲 100% 分數。</p>
+                <p>2. <b>他隊搶答</b>：答對獲 50% 分數。</p>
+                <p>3. <b>解釋獎勵</b>：額外獲得 50% 加分！</p>
+            </div>
+            
+            <div class="grid grid-cols-2 gap-4">
+                <button onclick="startGame(3)" class="p-4 rounded-2xl border-2 hover:border-blue-500 hover:bg-blue-50 font-bold transition-all active:scale-95 text-slate-700">3 組</button>
+                <button onclick="startGame(4)" class="p-4 rounded-2xl border-2 hover:border-blue-500 hover:bg-blue-50 font-bold transition-all active:scale-95 text-slate-700">4 組</button>
+                <button onclick="startGame(5)" class="p-4 rounded-2xl border-2 hover:border-blue-500 hover:bg-blue-50 font-bold transition-all active:scale-95 text-slate-700">5 組</button>
+                <button onclick="startGame(6)" class="p-4 rounded-2xl border-2 hover:border-blue-500 hover:bg-blue-50 font-bold transition-all active:scale-95 text-slate-700">6 組</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 遊戲主畫面 -->
+    <div id="game-screen" class="hidden min-h-screen p-4 md:p-8">
+        <div class="max-w-7xl mx-auto">
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-xl md:text-3xl font-bold text-slate-800 flex items-center gap-2">
+                    <i data-lucide="award" class="text-blue-600"></i>
+                    益智挑戰
+                </h1>
+                <div class="flex gap-2">
+                    <button onclick="showResetModal()" class="flex items-center gap-2 bg-white border border-slate-300 px-4 py-2 rounded-lg hover:bg-slate-50 transition-colors shadow-sm">
+                        <i data-lucide="rotate-ccw" size="18"></i> 重新設定
+                    </button>
+                </div>
+            </div>
+
+            <div class="flex flex-col lg:flex-row gap-6">
+                <div id="scoreboard" class="lg:w-32 flex lg:flex-col flex-row flex-wrap gap-2"></div>
+                <div class="flex-1 overflow-x-auto no-scrollbar">
+                    <div id="game-grid" class="grid grid-cols-6 gap-3 min-w-[800px]"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 題目主彈窗 -->
+    <div id="question-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+        <div class="bg-white rounded-3xl shadow-2xl max-w-3xl w-full flex flex-col relative overflow-hidden animate-zoom-in h-[85vh] md:h-auto md:max-h-[90vh]">
+            <div class="absolute top-0 left-0 w-full h-2 bg-blue-600"></div>
+            
+            <div class="p-6 pb-2 flex justify-between items-start">
+                <span id="modal-points" class="bg-slate-100 text-slate-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5">
+                    <i data-lucide="star" class="text-yellow-500" size="14"></i> 價值 0 分
+                </span>
+                <button onclick="closeQuestionModal()" class="text-slate-400 hover:text-slate-600 p-1 rounded-full hover:bg-slate-100">
+                    <i data-lucide="x"></i>
+                </button>
+            </div>
+
+            <div id="modal-scroll-area" class="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+                <div class="flex flex-col items-center justify-center text-center py-8">
+                    <h2 id="modal-question-text" class="text-2xl md:text-4xl font-bold text-slate-800 mb-10 leading-relaxed px-4"></h2>
+                    <div id="answer-section">
+                        <button onclick="revealAnswer()" class="bg-slate-800 text-white px-10 py-4 rounded-2xl font-bold text-lg hover:bg-black transition-all active:scale-95 shadow-xl">
+                            查看正確答案
+                        </button>
+                    </div>
+                    <div id="revealed-answer" class="hidden bg-green-50 border-2 border-green-200 text-green-700 p-6 rounded-2xl w-full animate-fade-in max-w-2xl">
+                        <p class="text-[10px] font-bold uppercase mb-2 opacity-70">正確答案：</p>
+                        <p id="modal-answer-text" class="text-2xl md:text-3xl font-black"></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-6 pt-3 border-t bg-slate-50 flex gap-3">
+                <button onclick="openScoringPanel()" class="flex-1 py-4 bg-blue-600 text-white rounded-2xl font-black text-lg hover:bg-blue-700 shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                    <i data-lucide="gavel" size="20"></i> 進行計分判定
+                </button>
+                <button onclick="nextTurn()" class="px-6 py-4 bg-slate-900 text-white rounded-2xl font-black text-lg hover:bg-black shadow-lg active:scale-95 flex items-center justify-center gap-2">
+                    下一題 <i data-lucide="chevron-right" size="20"></i>
+                </button>
+            </div>
+
+            <div id="scoring-panel" class="hidden absolute inset-0 bg-white z-[60] flex flex-col animate-fade-in">
+                <div class="p-6 border-b flex justify-between items-center bg-slate-50">
+                    <div>
+                        <h3 class="font-black text-slate-800 text-xl flex items-center gap-2">
+                            <i data-lucide="shield-check" class="text-blue-600"></i> 裁判計分
+                        </h3>
+                        <p id="home-team-hint" class="text-xs text-blue-600 font-bold mt-1"></p>
+                    </div>
+                    <button onclick="closeScoringPanel()" class="bg-white border shadow-sm text-slate-600 px-4 py-2 rounded-xl font-bold hover:bg-slate-100 flex items-center gap-2">
+                        完成計分 <i data-lucide="check" size="18"></i>
+                    </button>
+                </div>
+                <div id="modal-team-actions" class="flex-1 overflow-y-auto p-6 grid grid-cols-1 md:grid-cols-2 gap-3 custom-scrollbar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 最終結果彈窗 -->
+    <div id="winner-modal" class="hidden fixed inset-0 bg-slate-900/95 flex flex-col items-center justify-center p-6 z-[100] animate-fade-in overflow-hidden">
+        <div id="confetti-container" class="absolute inset-0 pointer-events-none"></div>
+        <div class="max-w-md w-full text-center z-10">
+            <div class="w-32 h-32 bg-yellow-400 text-white rounded-full flex items-center justify-center mx-auto mb-8 shadow-[0_0_50px_rgba(250,204,21,0.5)] animate-bounce">
+                <i data-lucide="trophy" size="64"></i>
+            </div>
+            <h2 class="text-4xl font-black text-white mb-2 italic">GAME OVER</h2>
+            <p class="text-yellow-400 font-bold tracking-widest mb-10 text-xl uppercase">最終排名</p>
+            <div id="final-leaderboard" class="space-y-4 mb-12"></div>
+            <button onclick="confirmReset()" class="bg-white text-slate-900 px-10 py-4 rounded-2xl font-black text-xl hover:bg-yellow-400 transition-all active:scale-95">再玩一局</button>
+        </div>
+    </div>
+
+    <!-- 分數手動編輯彈窗 -->
+    <div id="edit-score-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[80] animate-fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-xs w-full p-6 text-center animate-zoom-in">
+            <h3 id="edit-team-name" class="text-xl font-bold text-slate-800 mb-4">修正分數</h3>
+            <div class="flex items-center justify-center gap-4 mb-6">
+                <button onclick="adjustScore(-50)" class="w-12 h-12 rounded-xl bg-slate-100 text-slate-600 font-bold">-50</button>
+                <div id="edit-score-value" class="text-3xl font-black text-blue-600 w-24">0</div>
+                <button onclick="adjustScore(50)" class="w-12 h-12 rounded-xl bg-slate-100 text-slate-600 font-bold">+50</button>
+            </div>
+            <button onclick="closeEditScore()" class="w-full py-3 bg-slate-800 text-white rounded-xl font-bold">完成修正</button>
+        </div>
+    </div>
+
+    <!-- 重置彈窗 -->
+    <div id="reset-modal" class="hidden fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[70] animate-fade-in">
+        <div class="bg-white rounded-2xl shadow-2xl max-sm w-full p-6 text-center animate-zoom-in">
+            <div class="w-16 h-16 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                <i data-lucide="alert-triangle" size="32"></i>
+            </div>
+            <h3 class="text-xl font-bold text-slate-800 mb-2">返回設定？</h3>
+            <div class="flex gap-3 mt-6">
+                <button onclick="hideResetModal()" class="flex-1 px-4 py-2 border border-slate-300 rounded-lg font-bold text-sm text-slate-600">取消</button>
+                <button onclick="confirmReset()" class="flex-1 px-4 py-2 bg-red-600 text-white rounded-lg font-bold text-sm">確定</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 題目資料 - 重新恢復展開式排版 (直觀易讀)
+        const INITIAL_DATA = [
+            {
+                category: "植物",
+                questions: [
+                    { points: 100, q: "是的，我們很彆扭<br>不敢迎向/任何一種撫觸<br>一聽到誰的聲響迫近<br>便緊緊摺起自己<br>以密密的、小小的刺/護衛自己", a: "含羞草" },
+                    { points: 200, q: "住在沒有水的/沙漠<br>只好伸出很多的手<br>向四方說/給我水", a: "仙人掌" },
+                    { points: 300, q: "只有延著堅硬的環節<br>向天空步步高升<br>才是你不變的志向<br>也只有綠，才是你一生想說的話。<br>那句話/再忠臣傳裡才能讀到", a: "竹" },
+                    { points: 400, q: "攀過來/附過去/處處都是春天<br>辦公桌上/我小聲的告訴你<br>這就是永遠不老的秘密", a: "常春藤" }
+                ]
+            },
+            {
+                category: "動物/昆蟲",
+                questions: [
+                    { points: 100, q: "對摺的情書，尋找花的住址", a: "蝴蝶" },
+                    { points: 200, q: "家住青草城<br>生來愛旅行<br>夜晚太黑暗<br>自己帶盞燈", a: "螢火蟲" },
+                    { points: 300, q: "出了伊甸園/再直的路/也走得曲折蜿蜒<br>偶爾也會停下來/昂首<br>對著無止盡的救贖之路<br>嗤嗤吐幾下舌頭", a: "蛇" },
+                    { points: 400, q: "獨行的灰衣客，履險如夷<br>走壁的輕功是你傳授的嗎？<br>貼遊的步法，倒掛的絕技<br>什麼是懼高症呢，你問？", a: "壁虎" }
+                ]
+            },
+            {
+                category: "文具",
+                questions: [
+                    { points: 100, q: "它會變短，像時間<br>每寫一段成長，就失去一截自己", a: "鉛筆" },
+                    { points: 200, q: "搖一搖，抹一抹<br>就能塗掉所有錯誤<br>只留下隱形的疤", a: "立可白" },
+                    { points: 300, q: "我背著你的書，也背著你的煩惱<br>考試前特別重，長假前特別輕", a: "書包" },
+                    { points: 400, q: "來自石頭的族群/雖然被騷人墨客<br>請入書齋/視為上賓<br>始終還不是/不改其石頭的本性", a: "硯台" }
+                ]
+            },
+            {
+                category: "物品",
+                questions: [
+                    { points: 100, q: "不論是/去舊也好/迎新也好<br>一次炸裂，已然注定/我是，要在<br>一個聲響裡誕生<br>一個聲響裡絕滅", a: "鞭炮" },
+                    { points: 200, q: "無悔的燒痛自己/直至<br>滴下最後一滴熱淚<br>冷死的心/完全無法復燃", a: "蠟燭" },
+                    { points: 300, q: "一隻奇怪的公雞/沒有任何自由<br>剝奪你發言權利的人<br>不時的給你機會<br>決定你向他申訴的/時間", a: "鬧鐘" },
+                    { points: 400, q: "是誰給你取這個名字<br>從未見你吹過一個曲子<br>你只是窮年累月的<br>瞇起兩隻冰冷的眼睛<br>在門內門外<br>看人家進進出出", a: "喇叭鎖" }
+                ]
+            },
+            {
+                category: "食物",
+                questions: [
+                    { points: 100, q: "餐桌上最安靜的那一碗<br>從不搶風頭<br>只是默默/把所有味道/都接住", a: "白飯" },
+                    { points: 200, q: "溶入身體裡面有限的水中<br>才想起故鄉是浩瀚的大海<br>當年以海浪的方式<br>一波一波的移民到陸地上", a: "鹽" },
+                    { points: 300, q: "一個黃媽媽<br>一生手段辣<br>愈老愈厲害<br>小孩最怕她", a: "薑" },
+                    { points: 400, q: "一顆像人類的頭顱<br>但沒有思想/只有滿腔熱血<br>每逢炎夏/大地和人們一起喊/渴啊<br>我便拋頭顱/灑熱血", a: "西瓜" }
+                ]
+            },
+            {
+                category: "玩具",
+                questions: [
+                    { points: 100, q: "我被用力抽打，才開始旋轉<br>原來，有些光彩<br>是靠疼痛換來的", a: "陀螺" },
+                    { points: 200, q: "扶搖直上，小小的希望懸得多高呢<br>長長一生莫非這樣一場遊戲吧<br>細細一線，卻想與整座天空拔河<br>上去再上去，都快看不見了<br>沿著河堤，我開始拉著天空奔跑", a: "風箏" },
+                    { points: 300, q: "一開始，我只是很多零碎的形狀<br>直到你耐心的/讓我便回原本的樣子<br>你說，我終於完成了<br>其實，是你，把混亂變成風景", a: "拼圖" },
+                    { points: 400, q: "我總是微笑<br>不管你生氣、哭泣<br>還是把我丟到床底<br>灰塵落在我身上/像時間<br>有一天你長大了<br>我卻還停在<br>那個，抱著你的夜晚", a: "娃娃" }
+                ]
+            }
+        ];
+
+        const TEAM_STYLES = [
+            { color: "border-red-500 bg-red-50 text-red-700", ring: "ring-red-400" },
+            { color: "border-orange-500 bg-orange-50 text-orange-700", ring: "ring-orange-400" },
+            { color: "border-yellow-500 bg-yellow-50 text-yellow-700", ring: "ring-yellow-400" },
+            { color: "border-green-500 bg-green-50 text-green-700", ring: "ring-green-400" },
+            { color: "border-blue-500 bg-blue-50 text-blue-700", ring: "ring-blue-400" },
+            { color: "border-purple-500 bg-purple-50 text-purple-700", ring: "ring-purple-400" },
+        ];
+
+        let state = { teams: [], activeTeamIndex: 0, usedQuestions: new Set(), currentQuestion: null, currentUsedActions: new Set(), editTeamId: null };
+
+        window.onload = () => lucide.createIcons();
+
+        function startGame(count) {
+            state.teams = Array.from({ length: count }, (_, i) => ({ id: i + 1, name: `Team ${i + 1}`, score: 0, style: TEAM_STYLES[i] }));
+            state.activeTeamIndex = 0;
+            state.usedQuestions = new Set();
+            document.getElementById('setup-screen').classList.add('hidden');
+            document.getElementById('game-screen').classList.remove('hidden');
+            document.getElementById('winner-modal').classList.add('hidden');
+            renderScoreboard();
+            renderGrid();
+        }
+
+        function renderScoreboard() {
+            const container = document.getElementById('scoreboard');
+            container.innerHTML = state.teams.map((team, idx) => `
+                <div class="flex-1 lg:flex-initial border-2 rounded-xl p-2 transition-all relative ${team.style.color} ${state.activeTeamIndex === idx ? `ring-4 ring-offset-1 ${team.style.ring}` : 'opacity-80 shadow-sm'}">
+                    ${state.activeTeamIndex === idx ? '<div class="absolute top-1 left-1 w-2.5 h-2.5 bg-red-600 rounded-full animate-pulse border-2 border-white shadow-sm"></div>' : ''}
+                    <button onclick="openEditScore(${team.id})" class="absolute top-1 right-1 p-1 opacity-0 hover:opacity-100 transition-opacity bg-white/50 rounded hover:bg-white">
+                        <i data-lucide="edit-3" size="10"></i>
+                    </button>
+                    <div class="text-center font-bold text-[10px] uppercase tracking-tighter mb-0.5 truncate">${team.name}</div>
+                    <div class="text-center text-xl md:text-2xl font-black ${team.score < 0 ? 'text-red-600' : ''}">${team.score}</div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function renderGrid() {
+            const grid = document.getElementById('game-grid');
+            let html = '';
+            INITIAL_DATA.forEach(cat => { html += `<div class="bg-slate-700 text-white p-4 rounded-xl text-center font-bold h-24 flex items-center justify-center leading-tight shadow-md">${cat.category}</div>`; });
+            for (let qIdx = 0; qIdx < 4; qIdx++) {
+                INITIAL_DATA.forEach((cat, catIdx) => {
+                    const id = `${catIdx}-${qIdx}`;
+                    const isUsed = state.usedQuestions.has(id);
+                    html += `<button onclick="handleTileClick(${catIdx}, ${qIdx})" ${isUsed ? 'disabled' : ''} class="h-28 rounded-xl border-2 text-3xl font-black transition-all flex items-center justify-center shadow-sm ${isUsed ? 'bg-slate-200 border-slate-200 text-slate-400 cursor-default' : 'bg-white border-slate-300 text-slate-700 hover:scale-105 hover:bg-blue-50 active:scale-95'}">${cat.questions[qIdx].points}</button>`;
+                });
+            }
+            grid.innerHTML = html;
+        }
+
+        function handleTileClick(catIdx, qIdx) {
+            const id = `${catIdx}-${qIdx}`;
+            state.currentQuestion = { ...INITIAL_DATA[catIdx].questions[qIdx], id };
+            state.currentUsedActions = new Set();
+            document.getElementById('modal-scroll-area').scrollTop = 0;
+            document.getElementById('scoring-panel').classList.add('hidden');
+            document.getElementById('modal-points').innerHTML = `<i data-lucide="star" class="text-yellow-500" size="14"></i> 價值 ${state.currentQuestion.points} 分`;
+            document.getElementById('modal-question-text').innerHTML = state.currentQuestion.q;
+            document.getElementById('modal-answer-text').innerHTML = state.currentQuestion.a;
+            document.getElementById('home-team-hint').innerText = `主場：${state.teams[state.activeTeamIndex].name}`;
+            document.getElementById('answer-section').classList.remove('hidden');
+            document.getElementById('revealed-answer').classList.add('hidden');
+            renderActionButtons();
+            document.getElementById('question-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function applyScore(teamId, multiplier, actionType) {
+            const team = state.teams.find(t => t.id === teamId);
+            const actionKey = `${actionType}-${teamId}`;
+            if (team && !state.currentUsedActions.has(actionKey)) {
+                team.score += Math.round(state.currentQuestion.points * multiplier);
+                state.currentUsedActions.add(actionKey);
+                renderScoreboard();
+                renderActionButtons();
+                if (multiplier > 0) revealAnswer();
+            }
+        }
+
+        function openEditScore(teamId) {
+            state.editTeamId = teamId;
+            const team = state.teams.find(t => t.id === teamId);
+            document.getElementById('edit-team-name').innerText = `修正 ${team.name} 分數`;
+            document.getElementById('edit-score-value').innerText = team.score;
+            document.getElementById('edit-score-modal').classList.remove('hidden');
+        }
+
+        function adjustScore(amount) {
+            const team = state.teams.find(t => t.id === state.editTeamId);
+            if (team) {
+                team.score += amount;
+                document.getElementById('edit-score-value').innerText = team.score;
+                renderScoreboard();
+            }
+        }
+
+        function closeEditScore() { document.getElementById('edit-score-modal').classList.add('hidden'); }
+        function openScoringPanel() { document.getElementById('scoring-panel').classList.remove('hidden'); lucide.createIcons(); }
+        function closeScoringPanel() { document.getElementById('scoring-panel').classList.add('hidden'); }
+        function revealAnswer() { document.getElementById('answer-section').classList.add('hidden'); document.getElementById('revealed-answer').classList.remove('hidden'); }
+        
+        function nextTurn() {
+            state.usedQuestions.add(state.currentQuestion.id);
+            state.activeTeamIndex = (state.activeTeamIndex + 1) % state.teams.length;
+            closeQuestionModal();
+            renderScoreboard();
+            renderGrid();
+            checkGameOver();
+        }
+
+        function checkGameOver() {
+            if (state.usedQuestions.size === 24) { showWinners(); }
+        }
+
+        function showWinners() {
+            const sortedTeams = [...state.teams].sort((a, b) => b.score - a.score);
+            const leaderboard = document.getElementById('final-leaderboard');
+            leaderboard.innerHTML = sortedTeams.map((team, idx) => `
+                <div class="flex items-center gap-4 bg-white/10 p-4 rounded-2xl border border-white/20 backdrop-blur-md">
+                    <div class="text-3xl font-black text-yellow-400 w-8">#${idx + 1}</div>
+                    <div class="flex-1 text-left text-white font-bold text-xl">${team.name}</div>
+                    <div class="text-2xl font-black text-white">${team.score}</div>
+                </div>
+            `).join('');
+            
+            const container = document.getElementById('confetti-container');
+            container.innerHTML = '';
+            for(let i=0; i<100; i++) {
+                const conf = document.createElement('div');
+                conf.className = 'confetti';
+                conf.style.left = Math.random() * 100 + 'vw';
+                conf.style.backgroundColor = ['#fde047', '#3b82f6', '#ef4444', '#22c55e'][Math.floor(Math.random()*4)];
+                conf.style.animationDelay = Math.random() * 3 + 's';
+                container.appendChild(conf);
+            }
+            document.getElementById('winner-modal').classList.remove('hidden');
+            lucide.createIcons();
+        }
+
+        function renderActionButtons() {
+            const teamActions = document.getElementById('modal-team-actions');
+            teamActions.innerHTML = state.teams.map((team, idx) => {
+                const isHome = (idx === state.activeTeamIndex);
+                const isPlusUsed = state.currentUsedActions.has(`plus-${team.id}`);
+                const isBonusUsed = state.currentUsedActions.has(`bonus-${team.id}`);
+                const isMinusUsed = state.currentUsedActions.has(`minus-${team.id}`);
+                return `
+                <div class="flex flex-col gap-2 p-3 rounded-2xl border ${isHome ? 'team-row-active border-blue-400 bg-blue-50/30' : 'border-slate-200 bg-white shadow-sm'}">
+                    <div class="flex items-center justify-between font-bold text-slate-700 text-sm px-1 truncate">
+                        <span class="truncate">${team.name}</span>
+                        ${isHome ? '<span class="text-[10px] bg-blue-600 text-white px-2 rounded-full py-0.5">主場</span>' : ''}
+                    </div>
+                    <div class="flex gap-2">
+                        <button ${isPlusUsed ? 'disabled' : ''} onclick="applyScore(${team.id}, ${isHome ? 1 : 0.5}, 'plus')" class="flex-1 py-3 bg-green-500 text-white rounded-xl text-xs font-black hover:bg-green-600 transition-all active:scale-90">+${isHome ? '100%' : '50%'}</button>
+                        <button ${isBonusUsed ? 'disabled' : ''} onclick="applyScore(${team.id}, 0.5, 'bonus')" class="flex-1 py-3 bg-yellow-500 text-white rounded-xl text-xs font-black hover:bg-yellow-600 transition-all active:scale-90">+解釋</button>
+                        <button ${isMinusUsed ? 'disabled' : ''} onclick="applyScore(${team.id}, -1, 'minus')" class="px-4 py-3 bg-red-100 text-red-600 rounded-xl text-xs font-black hover:bg-red-200 transition-all active:scale-90">-100%</button>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        function closeQuestionModal() { document.getElementById('question-modal').classList.add('hidden'); }
+        function showResetModal() { document.getElementById('reset-modal').classList.remove('hidden'); lucide.createIcons(); }
+        function hideResetModal() { document.getElementById('reset-modal').classList.add('hidden'); }
+        function confirmReset() { hideResetModal(); document.getElementById('game-screen').classList.add('hidden'); document.getElementById('winner-modal').classList.add('hidden'); document.getElementById('setup-screen').classList.remove('hidden'); }
+    </script>
+</body>
+</html>
