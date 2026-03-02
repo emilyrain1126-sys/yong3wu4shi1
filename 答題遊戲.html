@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>互動式益智問答教學遊戲 - 終極排版優化版</title>
+    <title>詠物詩益智問答教學遊戲</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -50,7 +50,7 @@
             <div class="w-20 h-20 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
                 <i data-lucide="trophy" size="40"></i>
             </div>
-            <h1 class="text-3xl font-black text-slate-800 mb-2">益智挑戰：終極版</h1>
+            <h1 class="text-3xl font-black text-slate-800 mb-2">詠物詩挑戰</h1>
             <div class="bg-blue-50 p-4 rounded-xl text-left text-sm text-blue-700 mb-8 space-y-1">
                 <p><strong>🔥 教學競賽規則：</strong></p>
                 <p>1. <b>主場隊</b>：答對獲 100% 分數。</p>
@@ -195,7 +195,7 @@
                 questions: [
                     { points: 100, q: "是的，我們很彆扭<br>不敢迎向/任何一種撫觸<br>一聽到誰的聲響迫近<br>便緊緊摺起自己<br>以密密的、小小的刺/護衛自己", a: "含羞草" },
                     { points: 200, q: "住在沒有水的/沙漠<br>只好伸出很多的手<br>向四方說/給我水", a: "仙人掌" },
-                    { points: 300, q: "只有延著堅硬的環節<br>向天空步步高升<br>才是你不變的志向<br>也只有綠，才是你一生想說的話。<br>那句話/再忠臣傳裡才能讀到", a: "竹" },
+                    { points: 300, q: "只有延著堅硬的環節<br>向天空步步高升<br>才是你不變的志向<br>也只有綠，才是你一生想說的話。<br>那句話/在忠臣傳裡才能讀到", a: "竹" },
                     { points: 400, q: "攀過來/附過去/處處都是春天<br>辦公桌上/我小聲的告訴你<br>這就是永遠不老的秘密", a: "常春藤" }
                 ]
             },
@@ -416,4 +416,5 @@
         function confirmReset() { hideResetModal(); document.getElementById('game-screen').classList.add('hidden'); document.getElementById('winner-modal').classList.add('hidden'); document.getElementById('setup-screen').classList.remove('hidden'); }
     </script>
 </body>
+
 </html>
